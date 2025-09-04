@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+</head>
+<body>
+    <input type="file" id="pdfInput" accept=".pdf">
+    <div id="progress"></div>
+    <div id="results"></div>
+
+    <script>
+        document.getElementById('pdfInput').addEventListener('change', processPDF);
+
+        async function processPDF(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const progressDiv = document.getElementById('progress');
+            const resultsDiv = document.getElementById('results');
+            
+            progressDiv.innerHTML = 'Loading PDF...';
+            
+            // Load PDF
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            progressDiv.innerHTML = `Processing ${pdf.numPages} pages...`;
+            
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                progressDiv.innerHTML = `Processing page ${pageNum}/${pdf.numPages}`;
+                
+                // Render page to canvas
+                const page = await pdf.getPage(pageNum);
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                
+                const viewport = page.getViewport({ scale: 2.0 }); // High quality
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                await page.render({ canvasContext: context, viewport }).promise;
+                
+                // Convert to image
+                const imageData = canvas.toDataURL('image/png');
+                
+                // Extract text with Tesseract.js
+                const { data: { text } } = await Tesseract.recognize(imageData, 'eng', {
+                    logger: m => console.log(m)
+                });
+                
+                // Display result
+                const pageDiv = document.createElement('div');
+                pageDiv.innerHTML = `
+                    <h3>Page ${pageNum}</h3>
+                    <img src="${imageData}" style="max-width: 300px;">
+                    <pre>${text}</pre>
+                `;
+                resultsDiv.appendChild(pageDiv);
+            }
+            
+            progressDiv.innerHTML = 'Complete!';
+        }
+    </script>
+</body>
+</html>
